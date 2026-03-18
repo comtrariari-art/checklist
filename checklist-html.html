@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>업무 체크리스트</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; min-height: 100vh; padding: 2rem 1rem; }
+    .wrap { max-width: 620px; margin: 0 auto; }
+    h1 { font-size: 20px; font-weight: 600; color: #1a1a18; margin-bottom: 1.5rem; }
+    .progress-meta { display: flex; justify-content: space-between; font-size: 13px; color: #888780; margin-bottom: 6px; }
+    .bar-bg { height: 8px; background: #e8e6df; border-radius: 4px; overflow: hidden; margin-bottom: 1.5rem; }
+    .bar-fill { height: 100%; background: #1D9E75; border-radius: 4px; transition: width .3s ease; }
+    .add-row { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+    .add-row input { flex: 1; height: 38px; padding: 0 12px; font-size: 14px; border: 1px solid #d3d1c7; border-radius: 8px; background: #fff; color: #1a1a18; outline: none; }
+    .add-row input:focus { border-color: #1D9E75; box-shadow: 0 0 0 3px #9FE1CB44; }
+    .add-row button { height: 38px; padding: 0 18px; font-size: 14px; border: 1px solid #d3d1c7; border-radius: 8px; background: #fff; color: #1a1a18; cursor: pointer; font-weight: 500; }
+    .add-row button:hover { background: #f0f0ee; }
+    .filters { display: flex; gap: 8px; margin-bottom: 1rem; }
+    .filters button { height: 30px; padding: 0 14px; font-size: 13px; border: 1px solid #d3d1c7; border-radius: 8px; background: #fff; color: #888780; cursor: pointer; }
+    .filters button.active { background: #E1F5EE; border-color: #1D9E75; color: #0F6E56; font-weight: 500; }
+    .list { display: flex; flex-direction: column; gap: 8px; }
+    .item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid #e8e6df; border-radius: 12px; transition: background .15s; }
+    .item.done { background: #f5f5f3; }
+    .cb { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; cursor: pointer; border: 1.5px solid #c8c6be; background: #fff; display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s; }
+    .cb.checked { background: #1D9E75; border-color: #1D9E75; }
+    .cb.checked svg { display: block; }
+    .cb svg { display: none; }
+    .label { flex: 1; font-size: 14px; color: #1a1a18; }
+    .item.done .label { text-decoration: line-through; color: #b4b2a9; }
+    .del { width: 26px; height: 26px; border: none; background: none; cursor: pointer; color: #b4b2a9; font-size: 16px; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .del:hover { color: #E24B4A; background: #FCEBEB; }
+    .empty { text-align: center; padding: 2.5rem; font-size: 14px; color: #b4b2a9; }
+    .save-status { font-size: 12px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+    <h1>업무 체크리스트</h1>
+    <span class="save-status" id="status" style="color:#1D9E75"></span>
+  </div>
+
+  <div class="progress-meta">
+    <span id="pct-label">진행률 0%</span>
+    <span id="count-label">0 / 0 완료</span>
+  </div>
+  <div class="bar-bg"><div class="bar-fill" id="bar" style="width:0%"></div></div>
+
+  <div class="add-row">
+    <input id="inp" type="text" placeholder="새 업무 항목 입력..." />
+    <button onclick="addItem()">추가</button>
+  </div>
+
+  <div class="filters">
+    <button class="active" onclick="setFilter('all',this)">전체</button>
+    <button onclick="setFilter('todo',this)">미완료</button>
+    <button onclick="setFilter('done',this)">완료</button>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'my-checklist';
+  let filter = 'all';
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [
+        { id:1, text:'기획서 초안 작성', done:false },
+        { id:2, text:'팀 미팅 준비', done:false },
+        { id:3, text:'이메일 회신', done:true },
+        { id:4, text:'주간 보고서 제출', done:false },
+      ];
+    } catch { return []; }
+  }
+
+  function save(items) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    const el = document.getElementById('status');
+    el.textContent = '저장됨';
+    el.style.color = '#1D9E75';
+    setTimeout(() => el.textContent = '', 1500);
+  }
+
+  let items = load();
+  let nxt = Math.max(...items.map(i => i.id), 0) + 1;
+
+  function render() {
+    const total = items.length;
+    const done = items.filter(i => i.done).length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('bar').style.width = pct + '%';
+    document.getElementById('pct-label').textContent = '진행률 ' + pct + '%';
+    document.getElementById('count-label').textContent = done + ' / ' + total + ' 완료';
+
+    const vis = items.filter(i =>
+      filter === 'all' ? true : filter === 'done' ? i.done : !i.done
+    );
+    const list = document.getElementById('list');
+    if (!vis.length) { list.innerHTML = '<div class="empty">항목이 없습니다</div>'; return; }
+    list.innerHTML = vis.map(i => `
+      <div class="item${i.done ? ' done' : ''}">
+        <div class="cb${i.done ? ' checked' : ''}" onclick="toggle(${i.id})">
+          <svg width="11" height="8" viewBox="0 0 11 8" fill="none">
+            <path d="M1 4L4 7L10 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="label">${i.text.replace(/</g,'&lt;')}</span>
+        <button class="del" onclick="del(${i.id})">✕</button>
+      </div>`).join('');
+  }
+
+  function toggle(id) {
+    items = items.map(i => i.id === id ? {...i, done: !i.done} : i);
+    save(items); render();
+  }
+
+  function del(id) {
+    items = items.filter(i => i.id !== id);
+    save(items); render();
+  }
+
+  function addItem() {
+    const inp = document.getElementById('inp');
+    const t = inp.value.trim();
+    if (!t) return;
+    items.push({ id: nxt++, text: t, done: false });
+    inp.value = '';
+    save(items); render();
+  }
+
+  function setFilter(f, btn) {
+    filter = f;
+    document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  }
+
+  document.getElementById('inp').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addItem();
+  });
+
+  render();
+</script>
+</body>
+</html>
